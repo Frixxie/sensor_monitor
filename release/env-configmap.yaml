@@ -1,0 +1,12 @@
+apiVersion: v1
+data:
+  DEVICE_LOCATION: Vinterhage
+  DEVICE_NAME: esp32_vinterhage
+  HEMRS_BASE_URL: http://hemrs
+  MQTT_HOST: thor.lan
+  TOPIC: tele/vinterhage/SENSOR
+kind: ConfigMap
+metadata:
+  labels:
+    io.kompose.service: sensor-monitor-env
+  name: env-sensor-monitor
