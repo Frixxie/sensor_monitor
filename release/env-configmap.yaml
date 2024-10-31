@@ -3,7 +3,7 @@ data:
   DEVICE_LOCATION: Vinterhage
   DEVICE_NAME: esp32_vinterhage
   HEMRS_BASE_URL: http://hemrs
-  MQTT_HOST: thor.lan
+  MQTT_HOST: server
   TOPIC: tele/vinterhage/SENSOR
 kind: ConfigMap
 metadata:
