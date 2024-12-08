@@ -23,13 +23,13 @@ pub struct Opts {
     #[structopt(short, long, env, default_value = "tele/vinterhage/SENSOR")]
     pub topic: String,
 
-    #[structopt(short, long, env, default_value = "http://thor:65534")]
+    #[structopt(short, long, env, default_value = "http://desktop:65534")]
     pub hemrs_base_url: String,
 
-    #[structopt(short, long, env, default_value = "esp32_vinterhage")]
+    #[structopt(short, long, env, default_value = "esp32_stue")]
     pub device_name: String,
 
-    #[structopt(short = "l", long, env, default_value = "Vinterhage")]
+    #[structopt(short = "l", long, env, default_value = "Stue")]
     pub device_location: String,
 }
 

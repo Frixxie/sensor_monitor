@@ -1,5 +1,3 @@
-PROJECT_NAME=sensor_monitor
-
 all: test
 
 build:
