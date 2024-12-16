@@ -2,10 +2,11 @@ use std::{fmt::Display, time::Duration};
 
 use anyhow::Result;
 
-use log::info;
+use metrics_exporter_prometheus::PrometheusBuilder;
 use rumqttc::{Client, MqttOptions, QoS};
-use simple_logger::SimpleLogger;
 use structopt::StructOpt;
+use tracing::{info, Level};
+use tracing_subscriber::FmtSubscriber;
 
 use crate::{
     hem::{setup_device, setup_sensors},
@@ -14,6 +15,42 @@ use crate::{
 
 mod hem;
 mod mqtt;
+
+#[derive(Debug, Clone)]
+enum LogLevel {
+    Trace,
+    Debug,
+    Info,
+    Warn,
+    Error,
+}
+
+impl std::str::FromStr for LogLevel {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "trace" => Ok(LogLevel::Trace),
+            "debug" => Ok(LogLevel::Debug),
+            "info" => Ok(LogLevel::Info),
+            "warn" => Ok(LogLevel::Warn),
+            "error" => Ok(LogLevel::Error),
+            _ => Err("unknown log level".to_string()),
+        }
+    }
+}
+
+impl From<LogLevel> for Level {
+    fn from(log_level: LogLevel) -> Self {
+        match log_level {
+            LogLevel::Trace => Level::TRACE,
+            LogLevel::Debug => Level::DEBUG,
+            LogLevel::Info => Level::INFO,
+            LogLevel::Warn => Level::WARN,
+            LogLevel::Error => Level::ERROR,
+        }
+    }
+}
 
 #[derive(StructOpt, Debug)]
 pub struct Opts {
@@ -31,6 +68,9 @@ pub struct Opts {
 
     #[structopt(short = "l", long, env, default_value = "Stue")]
     pub device_location: String,
+
+    #[structopt(short, long, default_value = "info")]
+    log_level: LogLevel,
 }
 
 impl Display for Opts {
@@ -45,11 +85,16 @@ impl Display for Opts {
 
 fn main() -> Result<()> {
     let opts = Opts::from_args();
-    SimpleLogger::new()
-        .with_level(log::LevelFilter::Info)
-        .init()?;
+    let level: Level = opts.log_level.into();
+    let subscriber = FmtSubscriber::builder()
+        .with_max_level(level)
+        .json()
+        .finish();
 
-    info!("{}", opts);
+    tracing::subscriber::set_global_default(subscriber).unwrap();
+    let _metrics_handler = PrometheusBuilder::new()
+        .install()
+        .expect("failed to install recorder/exporter");
 
     let http_client = reqwest::blocking::Client::new();
 
@@ -91,4 +136,3 @@ fn main() -> Result<()> {
     )?;
     Ok(())
 }
-

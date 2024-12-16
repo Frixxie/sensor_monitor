@@ -1,6 +1,6 @@
 use anyhow::Result;
-use log::info;
 use serde::{Deserialize, Serialize};
+use tracing::info;
 
 #[derive(Debug)]
 pub struct SensorIds {

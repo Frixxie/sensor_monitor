@@ -1,9 +1,9 @@
 use anyhow::{Error, Result};
 use chrono::NaiveDateTime;
-use log::{info, warn};
 use reqwest::blocking::Client;
 use rumqttc::{Connection, Event, Packet};
 use serde::{Deserialize, Serialize};
+use tracing::{info, warn};
 
 use crate::hem::{DeviceId, SensorIds};
 
@@ -134,7 +134,7 @@ pub fn handle_connection(
 ) -> Result<()> {
     for item in connection.iter() {
         match item {
-            Ok(item) => match item {
+            Ok(event) => match event {
                 Event::Incoming(inc) => {
                     handle_incomming(inc, http_client, device_id, sensor_ids, url)?
                 }
