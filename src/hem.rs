@@ -2,7 +2,7 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use tracing::info;
 
-#[derive(Debug)]
+#[derive(Debug, Deserialize)]
 pub struct SensorIds {
     pub ds18b20: i32,
     pub dht11_temperature: i32,

@@ -15,6 +15,7 @@ use crate::{
 
 mod hem;
 mod mqtt;
+mod measurement_device;
 
 #[derive(Debug, Clone)]
 enum LogLevel {

@@ -1,0 +1,5 @@
+
+[measurement_config]
+mqtt_topic = "tele/vinterhage/SENSOR"
+device_name = "esp32_stue"
+device_location = "Stue"
