@@ -8,11 +8,13 @@ use structopt::StructOpt;
 use tracing::{info, Level};
 use tracing_subscriber::FmtSubscriber;
 
-use sensor_monitor::{
-    parse_topic_configs, Opts, DeviceContext, TopicDeviceMap,
-    hem::{setup_device, setup_sensors},
-    mqtt::handle_connection,
-};
+mod config;
+mod hem;
+mod mqtt;
+
+use config::{parse_topic_configs, DeviceContext, Opts, TopicDeviceMap};
+use hem::{setup_device, setup_sensors};
+use mqtt::handle_connection;
 
 fn main() -> Result<()> {
     let opts = Opts::from_args();
@@ -37,7 +39,7 @@ fn main() -> Result<()> {
     let mut topic_device_map = TopicDeviceMap::new();
     for config in topic_configs {
         info!("Setting up device for topic: {}", config.topic);
-        
+
         let device_id = setup_device(
             &http_client,
             &format!("{}/api/devices", opts.hemrs_base_url),
@@ -60,7 +62,7 @@ fn main() -> Result<()> {
                 device_id,
                 sensor_ids,
                 topic: config.topic,
-            }
+            },
         );
     }
 
@@ -75,7 +77,7 @@ fn main() -> Result<()> {
     mqttoptions.set_keep_alive(Duration::from_secs(5));
 
     let (client, connection) = Client::new(mqttoptions, 10);
-    
+
     // Subscribe to all topics
     for topic in topic_device_map.keys() {
         info!("Subscribing to topic: {}", topic);

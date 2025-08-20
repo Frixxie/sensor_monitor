@@ -5,8 +5,7 @@ use rumqttc::{Connection, Event, Packet};
 use serde::{Deserialize, Serialize};
 use tracing::{info, warn};
 
-use crate::hem::{DeviceId, SensorIds};
-use crate::{TopicDeviceMap, DeviceContext};
+use crate::{hem::{DeviceId, SensorIds}, TopicDeviceMap};
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "PascalCase")]
@@ -102,14 +101,14 @@ pub fn handle_incomming(
 ) -> Result<()> {
     if let Packet::Publish(p) = inc {
         let topic = p.topic.clone();
-        
+
         // Find device context for this topic
         let device_context = topic_device_map.get(&topic)
             .ok_or_else(|| anyhow::anyhow!("No device configured for topic: {}", topic))?;
-        
+
         let payload = String::from_utf8(p.payload.to_vec())?;
         info!("Got payload from topic {}: {}", topic, payload);
-        
+
         match serde_json::from_str::<SensorEntry>(&payload) {
             Ok(sensor) => {
                 store_measurement(
@@ -160,7 +159,8 @@ pub fn handle_connection(
 mod tests {
     use super::*;
     use std::collections::HashMap;
-    use crate::{DeviceContext, hem::SensorIds};
+    use crate::config::DeviceContext;
+    use crate::hem::SensorIds;
     use rumqttc::{Publish, QoS};
 
     fn create_test_sensor_ids() -> SensorIds {
@@ -218,9 +218,9 @@ mod tests {
 
         let packet = Packet::Publish(publish);
         let client = reqwest::blocking::Client::new();
-        
+
         let result = handle_incomming(packet, &client, &topic_device_map, "http://localhost");
-        
+
         // The function should parse successfully but fail on HTTP call
         assert!(result.is_err() || result.is_ok());
     }
@@ -243,7 +243,7 @@ mod tests {
 
         let packet = Packet::Publish(publish);
         let client = reqwest::blocking::Client::new();
-        
+
         let result = handle_incomming(packet, &client, &topic_device_map, "http://localhost");
         assert!(result.is_err());
     }
@@ -273,7 +273,7 @@ mod tests {
 
         let packet = Packet::Publish(publish);
         let client = reqwest::blocking::Client::new();
-        
+
         let result = handle_incomming(packet, &client, &topic_device_map, "http://localhost");
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("No device configured for topic"));
@@ -296,13 +296,13 @@ mod tests {
         }"#;
 
         let entry: SensorEntry = serde_json::from_str(json).unwrap();
-        
+
         assert!(entry.ds18b20.is_some());
         assert!(entry.dht11.is_some());
-        
+
         let ds18b20 = entry.ds18b20.unwrap();
         assert_eq!(ds18b20.temperature, 23.5);
-        
+
         let dht11 = entry.dht11.unwrap();
         assert_eq!(dht11.temperature, 22.0);
         assert_eq!(dht11.humidity, 65.0);
@@ -321,7 +321,7 @@ mod tests {
         }"#;
 
         let entry: SensorEntry = serde_json::from_str(json).unwrap();
-        
+
         assert!(entry.ds18b20.is_some());
         assert!(entry.dht11.is_none());
     }
