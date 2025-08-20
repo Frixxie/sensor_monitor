@@ -1,4 +1,4 @@
-use std::{fmt::Display, time::Duration};
+use std::time::Duration;
 
 use anyhow::Result;
 
@@ -8,84 +8,15 @@ use structopt::StructOpt;
 use tracing::{info, Level};
 use tracing_subscriber::FmtSubscriber;
 
-use crate::{
+use sensor_monitor::{
+    parse_topic_configs, Opts, DeviceContext, TopicDeviceMap,
     hem::{setup_device, setup_sensors},
     mqtt::handle_connection,
 };
 
-mod hem;
-mod mqtt;
-
-#[derive(Debug, Clone)]
-enum LogLevel {
-    Trace,
-    Debug,
-    Info,
-    Warn,
-    Error,
-}
-
-impl std::str::FromStr for LogLevel {
-    type Err = String;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "trace" => Ok(LogLevel::Trace),
-            "debug" => Ok(LogLevel::Debug),
-            "info" => Ok(LogLevel::Info),
-            "warn" => Ok(LogLevel::Warn),
-            "error" => Ok(LogLevel::Error),
-            _ => Err("unknown log level".to_string()),
-        }
-    }
-}
-
-impl From<LogLevel> for Level {
-    fn from(log_level: LogLevel) -> Self {
-        match log_level {
-            LogLevel::Trace => Level::TRACE,
-            LogLevel::Debug => Level::DEBUG,
-            LogLevel::Info => Level::INFO,
-            LogLevel::Warn => Level::WARN,
-            LogLevel::Error => Level::ERROR,
-        }
-    }
-}
-
-#[derive(StructOpt, Debug)]
-pub struct Opts {
-    #[structopt(short, long, env, default_value = "thor.lan")]
-    pub mqtt_host: String,
-
-    #[structopt(short, long, env, default_value = "tele/vinterhage/SENSOR")]
-    pub topic: String,
-
-    #[structopt(short, long, env, default_value = "http://desktop:65534")]
-    pub hemrs_base_url: String,
-
-    #[structopt(short, long, env, default_value = "esp32_stue")]
-    pub device_name: String,
-
-    #[structopt(short = "l", long, env, default_value = "Stue")]
-    pub device_location: String,
-
-    #[structopt(short, long, default_value = "info")]
-    log_level: LogLevel,
-}
-
-impl Display for Opts {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "mqtt_host: {}, topic: {}, hemrs_base_url: {}, device_name: {}, device_location: {}",
-            self.mqtt_host, self.topic, self.hemrs_base_url, self.device_name, self.device_location
-        )
-    }
-}
-
 fn main() -> Result<()> {
     let opts = Opts::from_args();
-    let level: Level = opts.log_level.into();
+    let level: Level = opts.log_level.clone().into();
     let subscriber = FmtSubscriber::builder()
         .with_max_level(level)
         .json()
@@ -98,21 +29,40 @@ fn main() -> Result<()> {
 
     let http_client = reqwest::blocking::Client::new();
 
-    let device_id = setup_device(
-        &http_client,
-        &format!("{}/api/devices", opts.hemrs_base_url),
-        &opts.device_name,
-        &opts.device_location,
-    )?;
+    // Parse topic configurations
+    let topic_configs = parse_topic_configs(&opts)?;
+    info!("Loaded {} topic configurations", topic_configs.len());
 
-    info!("{:?}", device_id);
+    // Setup devices for each topic
+    let mut topic_device_map = TopicDeviceMap::new();
+    for config in topic_configs {
+        info!("Setting up device for topic: {}", config.topic);
+        
+        let device_id = setup_device(
+            &http_client,
+            &format!("{}/api/devices", opts.hemrs_base_url),
+            &config.device_name,
+            &config.device_location,
+        )?;
 
-    let sensor_ids = setup_sensors(
-        &http_client,
-        &format!("{}/api/sensors", opts.hemrs_base_url),
-    )?;
+        info!("Device ID for {}: {:?}", config.topic, device_id);
 
-    info!("{:?}", sensor_ids);
+        let sensor_ids = setup_sensors(
+            &http_client,
+            &format!("{}/api/sensors", opts.hemrs_base_url),
+        )?;
+
+        info!("Sensor IDs for {}: {:?}", config.topic, sensor_ids);
+
+        topic_device_map.insert(
+            config.topic.clone(),
+            DeviceContext {
+                device_id,
+                sensor_ids,
+                topic: config.topic,
+            }
+        );
+    }
 
     let mut mqttoptions = MqttOptions::new(
         format!(
@@ -125,13 +75,17 @@ fn main() -> Result<()> {
     mqttoptions.set_keep_alive(Duration::from_secs(5));
 
     let (client, connection) = Client::new(mqttoptions, 10);
-    client.subscribe(opts.topic, QoS::AtMostOnce)?;
+    
+    // Subscribe to all topics
+    for topic in topic_device_map.keys() {
+        info!("Subscribing to topic: {}", topic);
+        client.subscribe(topic, QoS::AtMostOnce)?;
+    }
 
     handle_connection(
         connection,
         &http_client,
-        &device_id,
-        &sensor_ids,
+        topic_device_map,
         &opts.hemrs_base_url,
     )?;
     Ok(())

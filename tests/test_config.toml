@@ -1,0 +1,16 @@
+# Test Configuration for Multi-Topic MQTT Sensor Monitor
+
+[[topics]]
+topic = "test/kitchen/SENSOR"
+device_name = "test_esp32_kitchen"
+device_location = "Test Kitchen"
+
+[[topics]]
+topic = "test/bedroom/SENSOR"
+device_name = "test_esp32_bedroom"
+device_location = "Test Bedroom"
+
+[[topics]]
+topic = "test/garage/SENSOR"
+device_name = "test_esp32_garage"
+device_location = "Test Garage"

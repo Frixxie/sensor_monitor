@@ -1,0 +1,28 @@
+# Sensor Monitor Configuration
+# Multiple MQTT topics with device mappings
+
+[[topics]]
+topic = "tele/kitchen/SENSOR"
+device_name = "esp32_kitchen"
+device_location = "Kitchen"
+
+[[topics]]
+topic = "tele/bedroom/SENSOR"
+device_name = "esp32_bedroom"
+device_location = "Bedroom"
+
+[[topics]]
+topic = "tele/garage/SENSOR"
+device_name = "esp32_garage"
+device_location = "Garage"
+
+[[topics]]
+topic = "tele/basement/SENSOR"
+device_name = "esp32_basement"
+device_location = "Basement"
+
+# Original topic for backwards reference
+[[topics]]
+topic = "tele/vinterhage/SENSOR"
+device_name = "esp32_stue"
+device_location = "Stue"

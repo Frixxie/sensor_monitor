@@ -1,0 +1,6 @@
+# Minimal test configuration with single topic
+
+[[topics]]
+topic = "test/single/SENSOR"
+device_name = "test_single_device"
+device_location = "Test Location"

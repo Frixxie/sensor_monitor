@@ -105,3 +105,103 @@ pub fn setup_device(
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_sensor_creation() {
+        let sensor = Sensor {
+            id: 1,
+            name: "Test Sensor".to_string(),
+            unit: "°C".to_string(),
+        };
+        
+        assert_eq!(sensor.id, 1);
+        assert_eq!(sensor.name, "Test Sensor");
+        assert_eq!(sensor.unit, "°C");
+    }
+
+    #[test]
+    fn test_device_creation() {
+        let device = Device {
+            id: 42,
+            name: "ESP32".to_string(),
+            location: "Kitchen".to_string(),
+        };
+        
+        assert_eq!(device.id, 42);
+        assert_eq!(device.name, "ESP32");
+        assert_eq!(device.location, "Kitchen");
+    }
+
+    #[test]
+    fn test_sensor_ids_creation() {
+        let sensor_ids = SensorIds {
+            ds18b20: 1,
+            dht11_temperature: 2,
+            dht11_humidity: 3,
+            dht11_dew_point: 4,
+        };
+        
+        assert_eq!(sensor_ids.ds18b20, 1);
+        assert_eq!(sensor_ids.dht11_temperature, 2);
+        assert_eq!(sensor_ids.dht11_humidity, 3);
+        assert_eq!(sensor_ids.dht11_dew_point, 4);
+    }
+
+    #[test]
+    fn test_sensor_serialization() {
+        let sensor = Sensor {
+            id: 1,
+            name: "Test Sensor".to_string(),
+            unit: "°C".to_string(),
+        };
+        
+        let json = serde_json::to_string(&sensor).unwrap();
+        assert!(json.contains("Test Sensor"));
+        assert!(json.contains("°C"));
+        // id should be skipped during serialization
+        assert!(!json.contains("\"id\""));
+    }
+
+    #[test]
+    fn test_device_serialization() {
+        let device = Device {
+            id: 42,
+            name: "ESP32".to_string(),
+            location: "Kitchen".to_string(),
+        };
+        
+        let json = serde_json::to_string(&device).unwrap();
+        assert!(json.contains("ESP32"));
+        assert!(json.contains("Kitchen"));
+        // id should be skipped during serialization
+        assert!(!json.contains("\"id\""));
+    }
+
+    #[test]
+    fn test_sensor_deserialization() {
+        let json = r#"{"id": 1, "name": "Test Sensor", "unit": "°C"}"#;
+        let sensor: Sensor = serde_json::from_str(json).unwrap();
+        
+        assert_eq!(sensor.id, 1);
+        assert_eq!(sensor.name, "Test Sensor");
+        assert_eq!(sensor.unit, "°C");
+    }
+
+    #[test]
+    fn test_device_deserialization() {
+        let json = r#"{"id": 42, "name": "ESP32", "location": "Kitchen"}"#;
+        let device: Device = serde_json::from_str(json).unwrap();
+        
+        assert_eq!(device.id, 42);
+        assert_eq!(device.name, "ESP32");
+        assert_eq!(device.location, "Kitchen");
+    }
+
+    // Note: The fetch_devices, fetch_sensors, setup_sensor, setup_sensors, and setup_device
+    // functions require HTTP mocking to test properly. In a full test suite, we would use
+    // mockito or similar to mock HTTP responses.
+}
