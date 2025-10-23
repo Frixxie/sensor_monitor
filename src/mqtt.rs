@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use anyhow::{Error, Result};
 use chrono::NaiveDateTime;
 use reqwest::blocking::Client;
@@ -5,45 +7,74 @@ use rumqttc::{Connection, Event, Packet};
 use serde::{Deserialize, Serialize};
 use tracing::{info, warn};
 
-use crate::{hem::{DeviceId, SensorIds}, TopicDeviceMap};
+use crate::hem::{DeviceId, SensorIds};
 
+/// DS18B20 temperature sensor data from Tasmota firmware.
+/// Uses PascalCase field names as received from Tasmota MQTT messages.
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "PascalCase")]
 pub struct DS18B20 {
+    /// Sensor ID string (not used in processing)
     #[serde(rename = "Id")]
     _id: String,
+    /// Temperature reading in Celsius
     temperature: f32,
 }
 
+/// DHT11 sensor data from Tasmota firmware.
+/// Uses PascalCase field names as received from Tasmota MQTT messages.
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "PascalCase")]
 pub struct DHT11 {
+    /// Temperature reading in Celsius
     temperature: f32,
+    /// Relative humidity percentage
     humidity: f32,
+    /// Calculated dew point in Celsius
     dew_point: f32,
 }
 
+/// Complete sensor data entry from Tasmota MQTT message.
+/// Contains timestamp and optional sensor readings.
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "PascalCase")]
 pub struct SensorEntry {
+    /// Timestamp of the reading (not used in processing)
     #[serde(rename = "Time")]
     _time: NaiveDateTime,
+    /// Optional DS18B20 sensor data
     #[serde(rename = "DS18B20")]
     ds18b20: Option<DS18B20>,
+    /// Optional DHT11 sensor data
     #[serde(rename = "DHT11")]
     dht11: Option<DHT11>,
+    /// Temperature unit string (not used in processing)
     #[serde(rename = "TempUnit")]
     _temp_unit: String,
 }
 
+/// Measurement data structure for hemrs API.
+/// Represents a single sensor reading for a specific device and sensor.
 #[derive(Serialize, Debug)]
 pub struct Measurement {
+    /// Device ID in hemrs
     device: i32,
+    /// Sensor ID in hemrs
     sensor: i32,
+    /// Measurement value
     measurement: f32,
 }
 
 impl Measurement {
+    /// Creates a new measurement instance.
+    ///
+    /// # Arguments
+    /// * `device` - Device ID from hemrs
+    /// * `sensor` - Sensor ID from hemrs
+    /// * `measurement` - Measurement value
+    ///
+    /// # Returns
+    /// * `Measurement` - New measurement instance
     pub fn new(device: i32, sensor: i32, measurement: f32) -> Self {
         Self {
             device,
@@ -53,6 +84,19 @@ impl Measurement {
     }
 }
 
+/// Stores sensor measurements to hemrs API.
+/// Processes both DHT11 and DS18B20 sensor data from a sensor entry.
+///
+/// # Arguments
+/// * `client` - HTTP client for making requests
+/// * `url` - Base URL for hemrs API (measurements endpoint will be appended)
+/// * `entry` - Parsed sensor data from MQTT message
+/// * `device_id` - Device ID in hemrs
+/// * `sensor_ids` - Collection of sensor IDs in hemrs
+///
+/// # Returns
+/// * `Ok(())` - All measurements stored successfully
+/// * `Err(anyhow::Error)` - HTTP or API error
 pub fn store_measurement(
     client: &reqwest::blocking::Client,
     url: &str,
@@ -93,35 +137,47 @@ pub fn store_measurement(
     Ok(())
 }
 
+/// Handles incoming MQTT packets, specifically publish packets with sensor data.
+/// Parses JSON payload and stores measurements to hemrs API.
+///
+/// # Arguments
+/// * `inc` - Incoming MQTT packet
+/// * `http_client` - HTTP client for API requests
+/// * `topic_to_device` - HashMap mapping topic strings to device IDs
+/// * `sensor_ids` - Collection of sensor IDs in hemrs
+/// * `url` - Base URL for hemrs API
+///
+/// # Returns
+/// * `Ok(())` - Packet processed successfully
+/// * `Err(anyhow::Error)` - Parse error, HTTP error, or API error
 pub fn handle_incomming(
     inc: Packet,
     http_client: &Client,
-    topic_device_map: &TopicDeviceMap,
+    topic_to_device: &HashMap<String, DeviceId>,
+    sensor_ids: &SensorIds,
     url: &str,
 ) -> Result<()> {
     if let Packet::Publish(p) = inc {
         let topic = p.topic.clone();
-
-        // Find device context for this topic
-        let device_context = topic_device_map.get(&topic)
-            .ok_or_else(|| anyhow::anyhow!("No device configured for topic: {}", topic))?;
-
         let payload = String::from_utf8(p.payload.to_vec())?;
         info!("Got payload from topic {}: {}", topic, payload);
-
+        
+        let device_id = topic_to_device.get(&topic)
+            .ok_or_else(|| anyhow::anyhow!("No device found for topic: {}", topic))?;
+        
         match serde_json::from_str::<SensorEntry>(&payload) {
             Ok(sensor) => {
                 store_measurement(
                     http_client,
                     &format!("{}/api/measurements", url),
                     sensor,
-                    &device_context.device_id,
-                    &device_context.sensor_ids,
+                    device_id,
+                    sensor_ids,
                 )?;
                 Ok(())
             }
             Err(e) => {
-                warn!("Error parsing payload from topic {}: {:?}", topic, e);
+                warn!("Error = {:?}", e);
                 Err(Error::new(e))
             }
         }
@@ -131,17 +187,31 @@ pub fn handle_incomming(
     }
 }
 
+/// Main MQTT connection handler loop.
+/// Processes incoming and outgoing MQTT events until connection closes or errors.
+///
+/// # Arguments
+/// * `connection` - MQTT connection from rumqttc
+/// * `http_client` - HTTP client for API requests
+/// * `topic_to_device` - HashMap mapping topic strings to device IDs
+/// * `sensor_ids` - Collection of sensor IDs in hemrs
+/// * `url` - Base URL for hemrs API
+///
+/// # Returns
+/// * `Ok(())` - Connection closed normally
+/// * `Err(anyhow::Error)` - Fatal connection or processing error
 pub fn handle_connection(
     mut connection: Connection,
     http_client: &Client,
-    topic_device_map: TopicDeviceMap,
+    topic_to_device: &HashMap<String, DeviceId>,
+    sensor_ids: &SensorIds,
     url: &str,
 ) -> Result<()> {
     for item in connection.iter() {
         match item {
             Ok(event) => match event {
                 Event::Incoming(inc) => {
-                    handle_incomming(inc, http_client, &topic_device_map, url)?
+                    handle_incomming(inc, http_client, topic_to_device, sensor_ids, url)?
                 }
                 Event::Outgoing(out) => {
                     info!("Sending {:?}", out)
@@ -158,26 +228,6 @@ pub fn handle_connection(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::HashMap;
-    use crate::config::DeviceContext;
-    use crate::hem::SensorIds;
-    use rumqttc::{Publish, QoS};
-
-    fn create_test_sensor_ids() -> SensorIds {
-        SensorIds {
-            ds18b20: 1,
-            dht11_temperature: 2,
-            dht11_humidity: 3,
-            dht11_dew_point: 4,
-        }
-    }
-
-    fn create_test_device_context() -> DeviceContext {
-        DeviceContext {
-            device_id: 42,
-            sensor_ids: create_test_sensor_ids(),
-        }
-    }
 
     #[test]
     fn test_measurement_new() {
@@ -188,140 +238,60 @@ mod tests {
     }
 
     #[test]
-    fn test_handle_incomming_valid_payload() {
-        let json_payload = r#"{
-            "Time": "2024-01-01T12:00:00",
-            "DS18B20": {
-                "Id": "test-id",
-                "Temperature": 23.5
-            },
-            "DHT11": {
-                "Temperature": 22.0,
-                "Humidity": 65.0,
-                "DewPoint": 15.5
-            },
-            "TempUnit": "C"
-        }"#;
-
-        let publish = Publish {
-            dup: false,
-            qos: QoS::AtMostOnce,
-            retain: false,
-            topic: "test/topic".to_string(),
-            pkid: 1,
-            payload: json_payload.as_bytes().into(),
-        };
-
-        let mut topic_device_map = HashMap::new();
-        topic_device_map.insert("test/topic".to_string(), create_test_device_context());
-
-        let packet = Packet::Publish(publish);
-        let client = reqwest::blocking::Client::new();
-
-        let result = handle_incomming(packet, &client, &topic_device_map, "http://localhost");
-
-        // The function should parse successfully but fail on HTTP call
-        assert!(result.is_err() || result.is_ok());
+    fn test_measurement_serialization() {
+        let measurement = Measurement::new(1, 2, 25.5);
+        let json = serde_json::to_string(&measurement).unwrap();
+        assert!(json.contains("\"device\":1"));
+        assert!(json.contains("\"sensor\":2"));
+        assert!(json.contains("\"measurement\":25.5"));
     }
 
     #[test]
-    fn test_handle_incomming_invalid_json() {
-        let invalid_json = "invalid json {{{";
-
-        let publish = Publish {
-            dup: false,
-            qos: QoS::AtMostOnce,
-            retain: false,
-            topic: "test/topic".to_string(),
-            pkid: 1,
-            payload: invalid_json.as_bytes().into(),
-        };
-
-        let mut topic_device_map = HashMap::new();
-        topic_device_map.insert("test/topic".to_string(), create_test_device_context());
-
-        let packet = Packet::Publish(publish);
-        let client = reqwest::blocking::Client::new();
-
-        let result = handle_incomming(packet, &client, &topic_device_map, "http://localhost");
-        assert!(result.is_err());
+    fn test_ds18b20_deserialization() {
+        let json = r#"{"Id": "test_id", "Temperature": 22.5}"#;
+        let ds18b20: DS18B20 = serde_json::from_str(json).unwrap();
+        assert_eq!(ds18b20._id, "test_id");
+        assert_eq!(ds18b20.temperature, 22.5);
     }
 
     #[test]
-    fn test_handle_incomming_unknown_topic() {
-        let json_payload = r#"{
-            "Time": "2024-01-01T12:00:00",
-            "DS18B20": {
-                "Id": "test-id",
-                "Temperature": 23.5
-            },
-            "TempUnit": "C"
-        }"#;
-
-        let publish = Publish {
-            dup: false,
-            qos: QoS::AtMostOnce,
-            retain: false,
-            topic: "unknown/topic".to_string(),
-            pkid: 1,
-            payload: json_payload.as_bytes().into(),
-        };
-
-        let mut topic_device_map = HashMap::new();
-        topic_device_map.insert("test/topic".to_string(), create_test_device_context());
-
-        let packet = Packet::Publish(publish);
-        let client = reqwest::blocking::Client::new();
-
-        let result = handle_incomming(packet, &client, &topic_device_map, "http://localhost");
-        assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("No device configured for topic"));
+    fn test_dht11_deserialization() {
+        let json = r#"{"Temperature": 23.0, "Humidity": 45.0, "DewPoint": 10.5}"#;
+        let dht11: DHT11 = serde_json::from_str(json).unwrap();
+        assert_eq!(dht11.temperature, 23.0);
+        assert_eq!(dht11.humidity, 45.0);
+        assert_eq!(dht11.dew_point, 10.5);
     }
 
     #[test]
     fn test_sensor_entry_deserialization() {
         let json = r#"{
-            "Time": "2024-01-01T12:00:00",
-            "DS18B20": {
-                "Id": "test-id",
-                "Temperature": 23.5
-            },
-            "DHT11": {
-                "Temperature": 22.0,
-                "Humidity": 65.0,
-                "DewPoint": 15.5
-            },
+            "Time": "2023-01-01T12:00:00",
+            "DS18B20": {"Id": "test", "Temperature": 22.0},
+            "DHT11": {"Temperature": 23.0, "Humidity": 45.0, "DewPoint": 10.5},
             "TempUnit": "C"
         }"#;
-
         let entry: SensorEntry = serde_json::from_str(json).unwrap();
-
         assert!(entry.ds18b20.is_some());
         assert!(entry.dht11.is_some());
-
-        let ds18b20 = entry.ds18b20.unwrap();
-        assert_eq!(ds18b20.temperature, 23.5);
-
-        let dht11 = entry.dht11.unwrap();
-        assert_eq!(dht11.temperature, 22.0);
-        assert_eq!(dht11.humidity, 65.0);
-        assert_eq!(dht11.dew_point, 15.5);
+        assert_eq!(entry._temp_unit, "C");
     }
 
     #[test]
-    fn test_sensor_entry_partial_data() {
+    fn test_sensor_entry_partial_deserialization() {
         let json = r#"{
-            "Time": "2024-01-01T12:00:00",
-            "DS18B20": {
-                "Id": "test-id",
-                "Temperature": 23.5
-            },
+            "Time": "2023-01-01T12:00:00",
+            "DS18B20": {"Id": "test", "Temperature": 22.0},
             "TempUnit": "C"
         }"#;
-
         let entry: SensorEntry = serde_json::from_str(json).unwrap();
-
         assert!(entry.ds18b20.is_some());
         assert!(entry.dht11.is_none());
+    }
+
+    #[test]
+    fn test_sensor_entry_invalid_json() {
+        let json = r#"{"invalid": "json"}"#;
+        assert!(serde_json::from_str::<SensorEntry>(json).is_err());
     }
 }

@@ -1,3 +1,10 @@
 services:
   sensor-monitor:
+    restart: always
     build: .
+    environment:
+      # Override MQTT host if needed
+      - MQTT_HOST=thor.lan
+      - HEMRS_BASE_URL=https://hemrs.frikk.io
+      # Override hemrs URL if needed  
+      - CONFIG=/app/config.toml

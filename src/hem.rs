@@ -2,42 +2,89 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use tracing::info;
 
+/// Collection of sensor IDs for all supported sensor types.
+/// Contains the hemrs database IDs for each sensor type.
 #[derive(Debug)]
 pub struct SensorIds {
+    /// DS18B20 temperature sensor ID
     pub ds18b20: i32,
+    /// DHT11 temperature sensor ID
     pub dht11_temperature: i32,
+    /// DHT11 humidity sensor ID
     pub dht11_humidity: i32,
+    /// DHT11 dew point sensor ID
     pub dht11_dew_point: i32,
 }
 
+/// Sensor definition for hemrs API communication.
+/// Used for both fetching existing sensors and creating new ones.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Sensor {
+    /// Sensor ID (not serialized when creating new sensors)
     #[serde(skip_serializing)]
     id: i32,
+    /// Human-readable sensor name
     name: String,
+    /// Measurement unit (e.g., "°C", "%")
     unit: String,
 }
 
+/// Type alias for device ID returned from hemrs API
 pub type DeviceId = i32;
 
+/// Device definition for hemrs API communication.
+/// Used for both fetching existing devices and creating new ones.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Device {
+    /// Device ID (not serialized when creating new devices)
     #[serde(skip_serializing)]
     id: i32,
+    /// Device name
     name: String,
+    /// Device location
     location: String,
 }
 
+/// Fetches all devices from the hemrs API.
+///
+/// # Arguments
+/// * `client` - HTTP client for making requests
+/// * `url` - Full URL to the devices API endpoint
+///
+/// # Returns
+/// * `Ok(Vec<Device>)` - List of devices from API
+/// * `Err(anyhow::Error)` - HTTP or JSON parsing error
 pub fn fetch_devices(client: &reqwest::blocking::Client, url: &str) -> Result<Vec<Device>> {
     let devices = client.get(url).send()?.json::<Vec<Device>>()?;
     Ok(devices)
 }
 
+/// Fetches all sensors from the hemrs API.
+///
+/// # Arguments
+/// * `client` - HTTP client for making requests
+/// * `url` - Full URL to the sensors API endpoint
+///
+/// # Returns
+/// * `Ok(Vec<Sensor>)` - List of sensors from API
+/// * `Err(anyhow::Error)` - HTTP or JSON parsing error
 pub fn fetch_sensors(client: &reqwest::blocking::Client, url: &str) -> Result<Vec<Sensor>> {
     let devices = client.get(url).send()?.json::<Vec<Sensor>>()?;
     Ok(devices)
 }
 
+/// Sets up a single sensor in hemrs, creating it if it doesn't exist.
+/// This function will recursively call itself after creating a new sensor.
+///
+/// # Arguments
+/// * `client` - HTTP client for making requests
+/// * `url` - Full URL to the sensors API endpoint
+/// * `sensor_name` - Name of the sensor to find or create
+/// * `sensor_unit` - Unit of measurement for the sensor
+///
+/// # Returns
+/// * `Ok(i32)` - Sensor ID from hemrs
+/// * `Err(anyhow::Error)` - HTTP, JSON, or API error
 fn setup_sensor(
     client: &reqwest::blocking::Client,
     url: &str,
@@ -64,6 +111,16 @@ fn setup_sensor(
     }
 }
 
+/// Sets up all required sensors in hemrs for the supported sensor types.
+/// Creates sensors if they don't exist and returns their IDs.
+///
+/// # Arguments
+/// * `client` - HTTP client for making requests
+/// * `url` - Full URL to the sensors API endpoint
+///
+/// # Returns
+/// * `Ok(SensorIds)` - Collection of all sensor IDs
+/// * `Err(anyhow::Error)` - HTTP, JSON, or API error
 pub fn setup_sensors(client: &reqwest::blocking::Client, url: &str) -> Result<SensorIds> {
     let ds18b20 = setup_sensor(client, url, "DS18B20", "°C")?;
     let dht11_temperature = setup_sensor(client, url, "DHT11 Temperature", "°C")?;
@@ -78,6 +135,18 @@ pub fn setup_sensors(client: &reqwest::blocking::Client, url: &str) -> Result<Se
     })
 }
 
+/// Sets up a device in hemrs, creating it if it doesn't exist.
+/// This function will recursively call itself after creating a new device.
+///
+/// # Arguments
+/// * `client` - HTTP client for making requests
+/// * `url` - Full URL to the devices API endpoint
+/// * `device_name` - Name of the device to find or create
+/// * `device_location` - Location of the device to find or create
+///
+/// # Returns
+/// * `Ok(DeviceId)` - Device ID from hemrs
+/// * `Err(anyhow::Error)` - HTTP, JSON, or API error
 pub fn setup_device(
     client: &reqwest::blocking::Client,
     url: &str,
@@ -111,32 +180,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_sensor_creation() {
-        let sensor = Sensor {
-            id: 1,
-            name: "Test Sensor".to_string(),
-            unit: "°C".to_string(),
-        };
-        
-        assert_eq!(sensor.id, 1);
-        assert_eq!(sensor.name, "Test Sensor");
-        assert_eq!(sensor.unit, "°C");
-    }
-
-    #[test]
-    fn test_device_creation() {
-        let device = Device {
-            id: 42,
-            name: "ESP32".to_string(),
-            location: "Kitchen".to_string(),
-        };
-        
-        assert_eq!(device.id, 42);
-        assert_eq!(device.name, "ESP32");
-        assert_eq!(device.location, "Kitchen");
-    }
-
-    #[test]
     fn test_sensor_ids_creation() {
         let sensor_ids = SensorIds {
             ds18b20: 1,
@@ -144,7 +187,6 @@ mod tests {
             dht11_humidity: 3,
             dht11_dew_point: 4,
         };
-        
         assert_eq!(sensor_ids.ds18b20, 1);
         assert_eq!(sensor_ids.dht11_temperature, 2);
         assert_eq!(sensor_ids.dht11_humidity, 3);
@@ -158,26 +200,22 @@ mod tests {
             name: "Test Sensor".to_string(),
             unit: "°C".to_string(),
         };
-        
         let json = serde_json::to_string(&sensor).unwrap();
         assert!(json.contains("Test Sensor"));
         assert!(json.contains("°C"));
-        // id should be skipped during serialization
         assert!(!json.contains("\"id\""));
     }
 
     #[test]
     fn test_device_serialization() {
         let device = Device {
-            id: 42,
-            name: "ESP32".to_string(),
-            location: "Kitchen".to_string(),
+            id: 1,
+            name: "Test Device".to_string(),
+            location: "Test Location".to_string(),
         };
-        
         let json = serde_json::to_string(&device).unwrap();
-        assert!(json.contains("ESP32"));
-        assert!(json.contains("Kitchen"));
-        // id should be skipped during serialization
+        assert!(json.contains("Test Device"));
+        assert!(json.contains("Test Location"));
         assert!(!json.contains("\"id\""));
     }
 
@@ -185,7 +223,6 @@ mod tests {
     fn test_sensor_deserialization() {
         let json = r#"{"id": 1, "name": "Test Sensor", "unit": "°C"}"#;
         let sensor: Sensor = serde_json::from_str(json).unwrap();
-        
         assert_eq!(sensor.id, 1);
         assert_eq!(sensor.name, "Test Sensor");
         assert_eq!(sensor.unit, "°C");
@@ -193,15 +230,10 @@ mod tests {
 
     #[test]
     fn test_device_deserialization() {
-        let json = r#"{"id": 42, "name": "ESP32", "location": "Kitchen"}"#;
+        let json = r#"{"id": 1, "name": "Test Device", "location": "Test Location"}"#;
         let device: Device = serde_json::from_str(json).unwrap();
-        
-        assert_eq!(device.id, 42);
-        assert_eq!(device.name, "ESP32");
-        assert_eq!(device.location, "Kitchen");
+        assert_eq!(device.id, 1);
+        assert_eq!(device.name, "Test Device");
+        assert_eq!(device.location, "Test Location");
     }
-
-    // Note: The fetch_devices, fetch_sensors, setup_sensor, setup_sensors, and setup_device
-    // functions require HTTP mocking to test properly. In a full test suite, we would use
-    // mockito or similar to mock HTTP responses.
 }
