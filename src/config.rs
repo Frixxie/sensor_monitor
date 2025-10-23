@@ -54,7 +54,6 @@ pub struct TopicConfig {
 pub struct DeviceContext {
     pub device_id: hem::DeviceId,
     pub sensor_ids: hem::SensorIds,
-    pub topic: String,
 }
 
 pub type TopicDeviceMap = HashMap<String, DeviceContext>;
@@ -116,11 +115,10 @@ mod tests {
         }
     }
 
-    fn create_test_device_context(topic: &str, device_id: DeviceId) -> DeviceContext {
+    fn create_test_device_context(_topic: &str, device_id: DeviceId) -> DeviceContext {
         DeviceContext {
             device_id,
             sensor_ids: create_test_sensor_ids(),
-            topic: topic.to_string(),
         }
     }
 
@@ -148,7 +146,7 @@ mod tests {
         assert_eq!(topic_device_map.get("garage/sensors").unwrap().device_id, 3);
         
         // Test that unknown topic returns None
-        assert!(topic_device_map.get("unknown/topic").is_none());
+        assert!(!topic_device_map.contains_key("unknown/topic"));
     }
 
     #[test]
@@ -170,7 +168,7 @@ device_name = "integration_device3"
 device_location = "Integration Location 3"
 "#;
         
-        let mut temp_file = NamedTempFile::new().unwrap();
+        let temp_file = NamedTempFile::new().unwrap();
         fs::write(temp_file.path(), toml_content).unwrap();
         
         let opts = Opts {
@@ -206,7 +204,6 @@ device_location = "Integration Location 3"
         let context = create_test_device_context("test/topic", 42);
         
         assert_eq!(context.device_id, 42);
-        assert_eq!(context.topic, "test/topic");
         assert_eq!(context.sensor_ids.ds18b20, 1);
         assert_eq!(context.sensor_ids.dht11_temperature, 2);
         assert_eq!(context.sensor_ids.dht11_humidity, 3);
@@ -227,7 +224,7 @@ device_location = "Room {}"
 "#, i, i, i));
         }
         
-        let mut temp_file = NamedTempFile::new().unwrap();
+        let temp_file = NamedTempFile::new().unwrap();
         fs::write(temp_file.path(), toml_content).unwrap();
         
         let opts = Opts {
@@ -259,7 +256,7 @@ device_name = "test_device"
 device_location = "Test Location"
 "#;
         
-        let mut temp_file = NamedTempFile::new().unwrap();
+        let temp_file = NamedTempFile::new().unwrap();
         fs::write(temp_file.path(), malformed_toml).unwrap();
         
         let opts = Opts {
@@ -283,7 +280,7 @@ topic = "test/topic"
 # Missing device_name and device_location
 "#;
         
-        let mut temp_file = NamedTempFile::new().unwrap();
+        let temp_file = NamedTempFile::new().unwrap();
         fs::write(temp_file.path(), incomplete_toml).unwrap();
         
         let opts = Opts {
@@ -306,7 +303,7 @@ device_name = "test_device"
 device_location = "Test Location"
 "#;
         
-        let mut temp_file = NamedTempFile::new().unwrap();
+        let temp_file = NamedTempFile::new().unwrap();
         fs::write(temp_file.path(), empty_topic_toml).unwrap();
         
         let opts = Opts {
@@ -338,7 +335,7 @@ device_name = "device2"
 device_location = "Location 2"
 "#;
         
-        let mut temp_file = NamedTempFile::new().unwrap();
+        let temp_file = NamedTempFile::new().unwrap();
         fs::write(temp_file.path(), duplicate_topics_toml).unwrap();
         
         let opts = Opts {
@@ -368,7 +365,7 @@ device_name = "esp32_café"
 device_location = "Café ☕"
 "#;
         
-        let mut temp_file = NamedTempFile::new().unwrap();
+        let temp_file = NamedTempFile::new().unwrap();
         fs::write(temp_file.path(), unicode_toml).unwrap();
         
         let opts = Opts {
@@ -397,7 +394,7 @@ device_name = "device_{}"
 device_location = "location_{}"
 "#, long_string, long_string, long_string);
         
-        let mut temp_file = NamedTempFile::new().unwrap();
+        let temp_file = NamedTempFile::new().unwrap();
         fs::write(temp_file.path(), long_topic_toml).unwrap();
         
         let opts = Opts {
@@ -423,7 +420,7 @@ device_name = "device-with-dashes_and_underscores"
 device_location = "Location with spaces & symbols!"
 "#;
         
-        let mut temp_file = NamedTempFile::new().unwrap();
+        let temp_file = NamedTempFile::new().unwrap();
         fs::write(temp_file.path(), special_chars_toml).unwrap();
         
         let opts = Opts {

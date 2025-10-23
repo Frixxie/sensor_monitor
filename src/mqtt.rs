@@ -176,16 +176,15 @@ mod tests {
         DeviceContext {
             device_id: 42,
             sensor_ids: create_test_sensor_ids(),
-            topic: "test/topic".to_string(),
         }
     }
 
     #[test]
     fn test_measurement_new() {
-        let measurement = Measurement::new(1, 2, 3.14);
+        let measurement = Measurement::new(1, 2, 25.5);
         assert_eq!(measurement.device, 1);
         assert_eq!(measurement.sensor, 2);
-        assert_eq!(measurement.measurement, 3.14);
+        assert_eq!(measurement.measurement, 25.5);
     }
 
     #[test]

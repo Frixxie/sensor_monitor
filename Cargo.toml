@@ -4,21 +4,21 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-anyhow = "1.0.94"
-chrono = { version = "0.4.39", features = ["serde"] }
-gethostname = "0.5.0"
-metrics = "0.24.1"
-metrics-exporter-prometheus = "0.16.0"
-reqwest = { version = "0.12.9", features = ["json", "blocking"] }
-rumqttc = "0.24.0"
-serde = { version = "1.0.216", features = ["derive"] }
-serde_json = "1.0.133"
-toml = "0.8"
+anyhow = "1.0.100"
+chrono = { version = "0.4.42", features = ["serde"] }
+gethostname = "1.1.0"
+metrics = "0.24.2"
+metrics-exporter-prometheus = "0.17.2"
+reqwest = { version = "0.12.24", features = ["json", "blocking"] }
+rumqttc = "0.25.0"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.145"
+toml = "0.9"
 structopt = { version = "0.3.26", features = ["color"] }
 tracing = "0.1.41"
-tracing-subscriber = { version = "0.3.19", features = ["json"] }
+tracing-subscriber = { version = "0.3.20", features = ["json"] }
 
 [dev-dependencies]
-mockito = "1.5"
-tempfile = "3.14"
+mockito = "1.7"
+tempfile = "3.23"
 tokio-test = "0.4"

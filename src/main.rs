@@ -25,7 +25,7 @@ fn main() -> Result<()> {
         .finish();
 
     tracing::subscriber::set_global_default(subscriber).unwrap();
-    let _metrics_handler = PrometheusBuilder::new()
+    PrometheusBuilder::new()
         .install()
         .expect("failed to install recorder/exporter");
 
@@ -61,7 +61,6 @@ fn main() -> Result<()> {
             DeviceContext {
                 device_id,
                 sensor_ids,
-                topic: config.topic,
             },
         );
     }
